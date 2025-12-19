@@ -17,36 +17,74 @@ NmapSD 是一个基于 Gin 的网络服务发现中间件，使用 nmap 自动�
 ## 📦 安装
 
 ```bash
-go get github.com/yourusername/nmap_sd
+go get github.com/Hoverhuang-er/nmap_sd@latest
+```
+
+或在你的项目中：
+
+```bash
+go mod init your-project
+go get github.com/Hoverhuang-er/nmap_sd
 ```
 
 ## 🚀 快速开始
 
-### 基础用法
+### 1. 在现有 Gin 项目中使用
 
 ```go
 package main
 
 import (
-    "nmap_sd/pkg/middleware"
     "github.com/gin-gonic/gin"
+    "github.com/Hoverhuang-er/nmap_sd/pkg/middleware"
 )
 
 func main() {
     r := gin.Default()
 
-    // 使用默认配置
-    r.Use(middleware.New())
-
-    // 或使用自定义配置
+    // 注册 NmapSD 中间件
     r.Use(middleware.New(middleware.Config{
         CIDR:         "192.168.2.0/22",  // 扫描的网段
         ScanPath:     "/mgsd",            // API 路径
         ScanInterval: 1,                  // 扫描间隔（分钟）
     }))
 
+    // 你的其他路由
+    r.GET("/api/users", handleUsers)
+    r.POST("/api/data", handleData)
+
     r.Run(":8080")
 }
+```
+
+### 2. 使用默认配置
+
+```go
+package main
+
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/Hoverhuang-er/nmap_sd/pkg/middleware"
+)
+
+func main() {
+    r := gin.Default()
+    
+    // 使用默认配置（CIDR: 192.168.2.0/22, Path: /mgsd, Interval: 1分钟）
+    r.Use(middleware.New())
+    
+    r.Run(":8080")
+}
+```
+
+### 3. 作为独立服务运行
+
+克隆仓库并运行示例：
+
+```bash
+git clone https://github.com/Hoverhuang-er/nmap_sd.git
+cd nmap_sd/example
+go run main.go
 ```
 
 ### API 响应示例
@@ -101,15 +139,193 @@ func main() {
 
 ```yaml
 scrape_configs:
-  - job_name: 'dynamic_discovery'
-    http_sd_configs:
-      - url: 'http://your-server:8080/mgsd'
-        refresh_interval: 60s
+  - job_name: 'dynamic_d     # Gin 中间件
+│   │   └── nmap_sd.go      # 中间件核心实现
+│   └── sd/                 # 扫描逻辑
+│       └── scanner.go      # Nmap 扫描封装
+├── example/                # 完整示例
+│   └── main.go            # 示例主程序
+├── .github/
+│   └── workflows/         # CI/CD 配置
+│       ├── ci.yml        # 持续集成
+│       └── release-package.yml   # 版本发布
+├── go.mod
+├── LICENSE
+├── README.md             # 项目文档
+└── USAGE.md             # 使用指南
 ```
 
-## 🛠️ 开发
+## 📚 完整示例
 
-### 前置要求
+查看 [example/main.go](example/main.go) 获取完整的可运行示例。
+
+### 运行示例
+
+```bash
+# 克隆仓库
+git clone https://github.com/Hoverhuang-er/nmap_sd.git
+cd nmap_sd/example
+
+# 运行
+go run main.go
+
+# 或编� 进阶配置
+
+### 自定义扫描端口
+
+编辑 [pkg/sd/scanner.go](pkg/sd/scanner.go) 中的 `commonPorts` 变量：
+
+```go
+var commonPorts = []PortService{
+    {Port: 9182, Name: "windows_exporter", Job: "windows_exporter"},
+    {Port: 80, Name: "http", Job: "http_services"},
+    {Port: 443, Name: "https", Job: "http_services"},
+    // 添加你的自定义端口
+    {Port: 3000, Name: "custom-service", Job: "my_service"},
+}
+```
+
+### 多网段扫描
+
+```go
+// 扫描多个网段，需要启动多个中间件实例
+r.Use(middleware.New(middleware.Config{
+    CIDR:     "192.168.1.0/24",
+    ScanPath: "/mgsd/network1",
+}))
+
+r.Use(middleware.New(middleware.Config{
+    CIDR:     "10.0.0.0/24",
+    ScanPath: "/mgsd/network2",
+}))
+```
+
+## 📦 版本发布
+
+本项目使用 GitHub Actions 自动化 CI/CD：
+
+- **持续集成**: 每次 push 或 PR 时运行测试和 lint
+- **版本发布**: 推送 tag 时自动创建 GitHub Release
+
+### 发布新版本
+
+```bash
+# 打标签
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+
+# GitHub Actions 会自动创建 Release
+```
+
+### 使用特定版本
+
+```bash
+# 使用最新版本
+go get github.com/Hoverhuang-er/nmap_sd@latest
+
+# 使用特定版本
+go get github.com/Hoverhuang-er/nmap_sd@v1.0.0
+
+# 使用特定 commit
+go get github.com/Hoverhuang-er/nmap_sd@commit-hash
+```
+
+## 📄 许可证
+
+MIT License - 详见 [LICENSE](LICENSE) 文件
+
+## 🤝 贡献
+
+欢迎贡献！请遵循以下步骤：
+
+1. Fork 本仓库
+2. 创建特性分支 (`git checkout -b feature/amazing-feature`)
+3. 提交更改 (`git commit -m 'Add amazing feature'`)
+4. 推送到分支 (`git push origin feature/amazing-feature`)
+5. 开启 Pull Request
+
+### 开发指南
+
+```bash
+# 克隆仓库
+git clone https://github.com/Hoverhuang-er/nmap_sd.git
+cd nmap_sd
+
+# 安装依赖
+go mod download
+
+# 运行测试
+go test -v ./...
+
+# 运行 lint
+golangci-lint run
+
+# 构建示例
+cd example && go build
+```
+
+## ⚠️ 注意事项
+
+1. **权限要求**: nmap 需要 root/sudo 权限进行完整扫描
+   ```bash
+   # Linux: 为 nmap 添加 capabilities
+   sudo setcap cap_net_raw,cap_net_admin,cap_net_bind_service+eip $(which nmap)
+   
+   # 或使用 sudo 运行程序
+   sudo ./your-program
+   ```
+
+2. **性能考虑**: 
+   - 大网段（/22, /16）扫描可能需要 5-10 分钟
+   - 建议生产环境扫描间隔设置为 5-10 分钟
+   - 首次扫描会阻塞，建议在后台初始化
+
+3. **网络影响**:
+   - nmap 扫描会产生网络流量
+   - 可能触发某些网络安全设备的告警
+   - 建议在内网环境使用
+
+4. **依赖要求**:
+   - 必须安装 nmap 命令行工具
+   - Go 1.18 或更高版本
+
+## 🐛 故障排查
+
+### nmap: command not found
+
+```bash
+# 安装 nmap
+brew install nmap      # macOS
+sudo apt install nmap  # Ubuntu/Debian
+sudo yum install nmap  # CentOS/RHEL
+```
+
+### 扫描无结果
+
+1. 检查 nmap 是否有足够权限
+2. 验证 CIDR 配置是否正确
+3. 查看日志输出排查错误
+
+### 扫描速度慢
+
+1. 减小扫描范围（使用更大的子网掩码）
+2. 增加扫描间隔
+3. 减少扫描的端口数量
+
+## 📞 联系方式
+
+- 提交 Issue: [GitHub Issues](https://github.com/Hoverhuang-er/nmap_sd/issues)
+- 讨论: [GitHub Discussions](https://github.com/Hoverhuang-er/nmap_sd/discussions)
+
+## 🌟 Star History
+
+如果这个项目对你有帮助，请给它一个 ⭐️！
+
+## 🔗 相关项目
+
+- [Gin](https://github.com/gin-gonic/gin) - HTTP web framework
+- [nmap](https://nmap.org/) - Network exploration tool
+- [Prometheus](https://prometheus.io/) - Monitoring system
 
 - Go 1.18+
 - nmap 安装在系统中

@@ -3,11 +3,11 @@ package sd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
-	"github.com/Ullaakut/nmap/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/Ullaakut/nmap/v3"
 )
 
 // ServiceTarget represents a group of discovered services
@@ -24,24 +24,12 @@ type PortService struct {
 	Labels map[string]string
 }
 
-// Common ports to scan
-var commonPorts = []PortService{
-	{Port: 9182, Name: "windows_exporter", Job: "windows_exporter"},
-	{Port: 80, Name: "http", Job: "http_services"},
-	{Port: 443, Name: "https", Job: "http_services"},
-	{Port: 8080, Name: "http-proxy", Job: "http_services"},
-	{Port: 8083, Name: "http-alt", Job: "http_services"},
-	{Port: 8089, Name: "http-alt", Job: "http_services"},
-	{Port: 8888, Name: "http-alt", Job: "http_services"},
-	{Port: 38089, Name: "custom", Job: "http_services"},
-}
-
 // ScanNetworkRange scans the given CIDR range for active hosts and open ports
-func ScanNetworkRange(cidr string) ([]ServiceTarget, error) {
+func ScanNetworkRange(cidr string, ports []PortService) ([]ServiceTarget, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	log.Infof("Starting nmap scan for CIDR: %s", cidr)
+	slog.Info("Starting nmap scan", "cidr", cidr)
 
 	// First scan: host discovery
 	hosts, err := discoverHosts(ctx, cidr)
@@ -50,21 +38,21 @@ func ScanNetworkRange(cidr string) ([]ServiceTarget, error) {
 	}
 
 	if len(hosts) == 0 {
-		log.Warn("No active hosts found")
+		slog.Warn("No active hosts found")
 		return []ServiceTarget{}, nil
 	}
 
-	log.Infof("Found %d active hosts, scanning ports...", len(hosts))
+	slog.Info("Found active hosts, scanning ports", "count", len(hosts))
 
 	// Second scan: port detection on active hosts
-	return scanPorts(ctx, hosts)
+	return scanPorts(ctx, hosts, ports)
 }
 
 // discoverHosts performs host discovery on the CIDR range
 func discoverHosts(ctx context.Context, cidr string) ([]string, error) {
 	scanner, err := nmap.NewScanner(
+		ctx,
 		nmap.WithTargets(cidr),
-		nmap.WithContext(ctx),
 		nmap.WithPingScan(),
 	)
 	if err != nil {
@@ -76,9 +64,9 @@ func discoverHosts(ctx context.Context, cidr string) ([]string, error) {
 		return nil, fmt.Errorf("scan failed: %w", err)
 	}
 
-	if len(warnings) > 0 {
-		for _, w := range warnings {
-			log.Warnf("nmap warning: %s", w)
+	if len(*warnings) > 0 {
+		for _, w := range *warnings {
+			slog.Warn("nmap warning", "message", w)
 		}
 	}
 
@@ -93,18 +81,18 @@ func discoverHosts(ctx context.Context, cidr string) ([]string, error) {
 }
 
 // scanPorts scans common ports on active hosts
-func scanPorts(ctx context.Context, hosts []string) ([]ServiceTarget, error) {
+func scanPorts(ctx context.Context, hosts []string, ports []PortService) ([]ServiceTarget, error) {
 	// Build port list
 	var portList []string
-	for _, ps := range commonPorts {
+	for _, ps := range ports {
 		portList = append(portList, fmt.Sprintf("%d", ps.Port))
 	}
-	ports := strings.Join(portList, ",")
+	portStr := strings.Join(portList, ",")
 
 	scanner, err := nmap.NewScanner(
+		ctx,
 		nmap.WithTargets(hosts...),
-		nmap.WithContext(ctx),
-		nmap.WithPorts(ports),
+		nmap.WithPorts(portStr),
 		nmap.WithServiceInfo(),
 	)
 	if err != nil {
@@ -116,17 +104,17 @@ func scanPorts(ctx context.Context, hosts []string) ([]ServiceTarget, error) {
 		return nil, fmt.Errorf("port scan failed: %w", err)
 	}
 
-	if len(warnings) > 0 {
-		for _, w := range warnings {
-			log.Warnf("nmap warning: %s", w)
+	if len(*warnings) > 0 {
+		for _, w := range *warnings {
+			slog.Warn("nmap warning", "message", w)
 		}
 	}
 
-	return buildServiceTargets(result), nil
+	return buildServiceTargets(result, ports), nil
 }
 
 // buildServiceTargets organizes scan results by service type
-func buildServiceTargets(result *nmap.Run) []ServiceTarget {
+func buildServiceTargets(result *nmap.Run, ports []PortService) []ServiceTarget {
 	// Group targets by job
 	jobMap := make(map[string][]string)
 	jobLabels := make(map[string]map[string]string)
@@ -144,7 +132,7 @@ func buildServiceTargets(result *nmap.Run) []ServiceTarget {
 			}
 
 			// Find matching port service
-			for _, ps := range commonPorts {
+			for _, ps := range ports {
 				if port.ID == ps.Port {
 					target := fmt.Sprintf("%s:%d", ip, port.ID)
 					jobMap[ps.Job] = append(jobMap[ps.Job], target)

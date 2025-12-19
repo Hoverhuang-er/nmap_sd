@@ -1,37 +1,67 @@
-name:  CI
+name: CI
 
 on:
   push:
-    tags:
-      - v*
-    # run only against tags
+    branches:
+      - main
+  pull_request:
     branches:
       - main
 
 jobs:
-  golangci:
+  test:
     strategy:
       matrix:
-        go: [1.18]
-        # os: [macos-latest, windows-latest,ubuntu-latest,centos-latest]
-        os: [macos-latest, ubuntu-latest]
-    name: lint
+        go: ['1.18', '1.19', '1.20', '1.21', '1.22', '1.23']
+        os: [ubuntu-latest]
+    name: Test (Go ${{ matrix.go }} on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/setup-go@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
-      - uses: actions/checkout@v3
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
+      
+      - name: Cache Go modules
+        uses: actions/cache@v3
         with:
-          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: v1.29
-          # Optional: working directory, useful for monorepos
-          # working-directory: somedir
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+      
+      - name: Download dependencies
+        run: go mod download
+      
+      - name: Build
+        run: go build -v ./...
+      
+      - name: Run tests
+        run: go test -v -race -coverprofile=coverage.out ./...
+      
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.go == '1.23'
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.out
 
-          # Optional: golangci-lint command line arguments.
-          # args: --issues-exit-code=0
-
-          # Optional: show only new issues if it's a pull request. The default value is `false`.
-          only-new-issues: true
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: latest
+          args: --timeout=5m

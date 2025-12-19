@@ -1,17 +1,20 @@
 package main
 
 import (
-	"nmap_sd/pkg/middleware"
+	"log/slog"
+	"os"
+
+	"github.com/Hoverhuang-er/nmap_sd/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	// Set log format
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-	})
+	// Set up structured logging
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 
 	// Create Gin router
 	r := gin.Default()
@@ -42,8 +45,9 @@ func main() {
 	})
 
 	// Start server
-	log.Info("Starting server on :8080")
+	slog.Info("Starting server on :8080")
 	if err := r.Run(":8080"); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+		slog.Error("Failed to start server", "error", err)
+		os.Exit(1)
 	}
 }

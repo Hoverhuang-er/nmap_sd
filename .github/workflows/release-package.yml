@@ -1,39 +1,72 @@
-name: ReleasePackage
+name: Release
 
 on:
   push:
-    # run only against tags
-    branches:
-      - main
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: write
-  # packages: write
-  # issues: write
 
 jobs:
-  goreleaser:
+  release:
+    name: Create Release
     runs-on: ubuntu-latest
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      -
-        name: Fetch all tags
-        run: git fetch --force --tags
-      -
-        name: Set up Go
-        uses: actions/setup-go@v2
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: 1.18
-      -
-        name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v2
+          go-version: '1.23'
+      
+      - name: Run tests
+        run: go test -v ./...
+      
+      - name: Build example
+        run: |
+          cd example
+          go build -v .
+      
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Extract changelog for this version
+          if [ -f CHANGELOG.md ]; then
+            awk -v ver="$VERSION" '
+              /^## \[/ { 
+                if (found) exit;
+                if ($0 ~ ver) { found=1; next } 
+              }
+              found && /^## \[/ { exit }
+              found { print }
+            ' CHANGELOG.md > release-notes.md
+            
+            # If no specific version found, add a default message
+            if [ ! -s release-notes.md ]; then
+              echo "Release $VERSION" > release-notes.md
+              echo "" >> release-notes.md
+              echo "See [CHANGELOG.md](https://github.com/Hoverhuang-er/nmap_sd/blob/main/CHANGELOG.md) for details." >> release-notes.md
+            fi
+          else
+            echo "Release $VERSION" > release-notes.md
+          fi
+          
+          cat release-notes.md
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
         with:
-          distribution: goreleaser
-          version: latest
-          args: release --rm-dist
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

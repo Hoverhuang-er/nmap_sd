@@ -1,19 +1,21 @@
 package middleware
 
 import (
-	"nmap_sd/pkg/sd"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/Hoverhuang-er/nmap_sd/pkg/sd"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-co-op/gocron"
-	log "github.com/sirupsen/logrus"
 )
 
 // NmapSD Gin middleware for network service discovery
 type NmapSD struct {
 	cidr        string
 	scanPath    string
+	ports       []sd.PortService
 	scheduler   *gocron.Scheduler
 	data        []sd.ServiceTarget
 	dataMutex   sync.RWMutex
@@ -28,6 +30,8 @@ type Config struct {
 	ScanPath string
 	// Scan interval in minutes (default: 1)
 	ScanInterval int
+	// Ports to scan (default: common ports)
+	Ports []sd.PortService
 }
 
 // DefaultConfig returns default configuration
@@ -36,6 +40,16 @@ func DefaultConfig() Config {
 		CIDR:         "192.168.2.0/22",
 		ScanPath:     "/mgsd",
 		ScanInterval: 1,
+		Ports: []sd.PortService{
+			{Port: 9182, Name: "windows_exporter", Job: "windows_exporter"},
+			{Port: 80, Name: "http", Job: "http_services"},
+			{Port: 443, Name: "https", Job: "http_services"},
+			{Port: 8080, Name: "http-proxy", Job: "http_services"},
+			{Port: 8083, Name: "http-alt", Job: "http_services"},
+			{Port: 8089, Name: "http-alt", Job: "http_services"},
+			{Port: 8888, Name: "http-alt", Job: "http_services"},
+			{Port: 38089, Name: "custom", Job: "http_services"},
+		},
 	}
 }
 
@@ -53,11 +67,15 @@ func New(config ...Config) gin.HandlerFunc {
 		if cfg.ScanInterval <= 0 {
 			cfg.ScanInterval = 1
 		}
+		if len(cfg.Ports) == 0 {
+			cfg.Ports = DefaultConfig().Ports
+		}
 	}
 
 	nsd := &NmapSD{
 		cidr:     cfg.CIDR,
 		scanPath: cfg.ScanPath,
+		ports:    cfg.Ports,
 		data:     []sd.ServiceTarget{},
 	}
 
@@ -83,10 +101,10 @@ func New(config ...Config) gin.HandlerFunc {
 
 // performScan executes the network scan and updates data
 func (n *NmapSD) performScan() {
-	log.Info("Starting network scan...")
-	results, err := sd.ScanNetworkRange(n.cidr)
+	slog.Info("Starting network scan...")
+	results, err := sd.ScanNetworkRange(n.cidr, n.ports)
 	if err != nil {
-		log.Errorf("Failed to scan network: %v", err)
+		slog.Error("Failed to scan network", "error", err)
 		return
 	}
 
@@ -95,7 +113,7 @@ func (n *NmapSD) performScan() {
 	n.initialized = true
 	n.dataMutex.Unlock()
 
-	log.Infof("Scan completed, found %d service groups", len(results))
+	slog.Info("Scan completed", "service_groups", len(results))
 }
 
 // handleScanResult returns the current scan results
