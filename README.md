@@ -42,11 +42,12 @@ import (
 func main() {
     r := gin.Default()
 
-    // 注册 NmapSD 中间件
+    // 注册 NmapSD 中间件（使用默认端口）
     r.Use(middleware.New(middleware.Config{
         CIDR:         "192.168.2.0/22",  // 扫描的网段
         ScanPath:     "/mgsd",            // API 路径
         ScanInterval: 1,                  // 扫描间隔（分钟）
+        // Ports: 留空使用默认端口，或自定义端口列表
     }))
 
     // 你的其他路由
@@ -122,10 +123,11 @@ go run main.go
 | `CIDR` | string | `"192.168.2.0/22"` | 要扫描的网络 CIDR |
 | `ScanPath` | string | `"/mgsd"` | API 端点路径 |
 | `ScanInterval` | int | `1` | 扫描间隔（分钟） |
+| `Ports` | []sd.PortService | 见下方 | 要扫描的端口列表 |
 
 ## 🔍 扫描的端口
 
-默认扫描以下端口：
+默认扫描以下端口（可通过 `Config.Ports` 自定义）：
 
 - **9182** - Windows Exporter
 - **80** - HTTP
@@ -173,15 +175,31 @@ go run main.go
 
 ### 自定义扫描端口
 
-编辑 [pkg/sd/scanner.go](pkg/sd/scanner.go) 中的 `commonPorts` 变量：
+通过 `Config.Ports` 配置自定义端口：
 
 ```go
-var commonPorts = []PortService{
-    {Port: 9182, Name: "windows_exporter", Job: "windows_exporter"},
-    {Port: 80, Name: "http", Job: "http_services"},
-    {Port: 443, Name: "https", Job: "http_services"},
-    // 添加你的自定义端口
-    {Port: 3000, Name: "custom-service", Job: "my_service"},
+import (
+    "github.com/gin-gonic/gin"
+    "github.com/Hoverhuang-er/nmap_sd/pkg/middleware"
+    "github.com/Hoverhuang-er/nmap_sd/pkg/sd"
+)
+
+func main() {
+    r := gin.Default()
+    
+    r.Use(middleware.New(middleware.Config{
+        CIDR:         "192.168.1.0/24",
+        ScanPath:     "/mgsd",
+        ScanInterval: 5,
+        Ports: []sd.PortService{
+            {Port: 9182, Name: "windows_exporter", Job: "windows_exporter"},
+            {Port: 3000, Name: "custom-app", Job: "my_services"},
+            {Port: 5000, Name: "api-server", Job: "my_services"},
+            {Port: 8080, Name: "web-app", Job: "web_services"},
+        },
+    }))
+    
+    r.Run(":8080")
 }
 ```
 
