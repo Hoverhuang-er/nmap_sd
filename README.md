@@ -47,6 +47,7 @@ func main() {
         CIDR:         "192.168.2.0/22",  // 扫描的网段
         ScanPath:     "/mgsd",            // API 路径
         ScanInterval: 1,                  // 扫描间隔（分钟）
+        LogLevel:     "INFO",             // 日志级别: INFO/ERROR/DEBUG
         // Ports: 留空使用默认端口，或自定义端口列表
     }))
 
@@ -124,6 +125,7 @@ go run main.go
 | `ScanPath` | string | `"/mgsd"` | API 端点路径 |
 | `ScanInterval` | int | `1` | 扫描间隔（分钟） |
 | `Ports` | []sd.PortService | 见下方 | 要扫描的端口列表 |
+| `LogLevel` | string | `"INFO"` | 日志级别："INFO", "ERROR", "DEBUG" |
 
 ## 🔍 扫描的端口
 
@@ -217,6 +219,35 @@ r.Use(middleware.New(middleware.Config{
     ScanPath: "/mgsd/network2",
 }))
 ```
+
+### 日志级别配置
+
+通过 `LogLevel` 控制日志输出详细程度：
+
+```go
+// 输出全量扫描日志，包括 nmap 详细信息
+r.Use(middleware.New(middleware.Config{
+    CIDR:     "192.168.1.0/24",
+    LogLevel: "DEBUG",
+}))
+
+// 只输出错误日志
+r.Use(middleware.New(middleware.Config{
+    CIDR:     "192.168.1.0/24",
+    LogLevel: "ERROR",
+}))
+
+// 默认 INFO 级别
+r.Use(middleware.New(middleware.Config{
+    CIDR:     "192.168.1.0/24",
+    LogLevel: "INFO",  // 输出常规信息和错误（默认）
+}))
+```
+
+**日志级别说明：**
+- `INFO`（默认）：输出常规操作信息、警告和错误
+- `ERROR`：仅输出错误信息
+- `DEBUG`：输出所有日志，包括详细的扫描过程和 nmap 原始信息
 
 ## 📦 版本发布
 
